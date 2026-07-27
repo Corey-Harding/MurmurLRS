@@ -54,6 +54,10 @@ extern const fhss_config_t *FHSSconfigDualBand;
 void FHSSrandomiseFHSSsequence(uint32_t seed);
 void FHSSrandomiseFHSSsequenceBuild(uint32_t seed, uint32_t freqCount, uint_fast8_t sync_channel, uint8_t *sequence);
 
+#if defined(MURMUR_ENCRYPT)
+void FHSSrandomiseFHSSsequenceSecure(const uint8_t enc_key[16]);
+#endif
+
 static inline uint32_t FHSSgetMinimumFreq(void)
 {
     return FHSSconfig->freq_start;

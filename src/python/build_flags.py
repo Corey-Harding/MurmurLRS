@@ -76,6 +76,10 @@ def process_build_flag(define):
             define = "-DMY_UID=" + UIDbytes
             sys.stdout.write("\u001b[32mUID bytes: " + UIDbytes + "\n")
             sys.stdout.flush()
+            if "-DMURMUR_ENCRYPT" not in build_flags:
+                build_flags.append("-DMURMUR_ENCRYPT")
+                sys.stdout.write("\u001b[32mMurmurLRS: encryption enabled\n")
+                sys.stdout.flush()
         if "MY_STARTUP_MELODY=" in define:
             parsedMelody = melodyparser.parse(define.split('"')[1::2][0])
             define = "-DMY_STARTUP_MELODY_ARR=\"" + parsedMelody + "\""

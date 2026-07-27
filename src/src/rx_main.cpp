@@ -673,7 +673,10 @@ void ICACHE_RAM_ATTR HWtimerCallbackTick() // this is 180 out of phase with the 
 {
     updatePhaseLock();
     OtaNonce++;
-
+    #if defined(MURMUR_ENCRYPT)
+        extern void MurmurTrackNonce();
+        MurmurTrackNonce();
+    #endif
     // if (!alreadyTLMresp && !alreadyFHSS && !LQCalc.currentIsSet()) // packet timeout AND didn't DIDN'T just hop or send TLM
     // {
     //     Radio.RXnb(); // put the radio cleanly back into RX in case of garbage data
@@ -835,6 +838,11 @@ void ICACHE_RAM_ATTR HWtimerCallbackTock()
 void LostConnection(bool resumeRx)
 {
     DBGLN("lost conn fc=%d fo=%d", FreqCorrection, hwTimer::getFreqOffset());
+
+    #if defined(MURMUR_ENCRYPT)
+        extern void MurmurResetCounter();
+        MurmurResetCounter();
+    #endif
 
     connectionState = disconnected; //set lost connection
     RXtimerState = tim_disconnected;
@@ -1091,8 +1099,22 @@ static bool ICACHE_RAM_ATTR ProcessRfPacket_SYNC(uint32_t const now, OTA_Sync_s 
         || connectionHasModelMatch != modelMatched)
     {
         //DBGLN("\r\n%ux%ux%u", OtaNonce, otaPktPtr->sync.nonce, otaPktPtr->sync.fhssIndex);
+        #if defined(MURMUR_ENCRYPT)
+        if (connectionState == disconnected) {
+            FHSSsetCurrIndex(otaSync->fhssIndex);
+            OtaNonce = otaSync->nonce;
+            extern void MurmurResetCounter();
+            MurmurResetCounter();
+        } else {
+            FHSSsetCurrIndex(otaSync->fhssIndex);
+            OtaNonce = otaSync->nonce;
+            extern void MurmurSyncNonce();
+            MurmurSyncNonce();
+        }
+        #else
         FHSSsetCurrIndex(otaSync->fhssIndex);
         OtaNonce = otaSync->nonce;
+        #endif
         TentativeConnection(now);
         // connectionHasModelMatch must come after TentativeConnection, which resets it
         connectionHasModelMatch = modelMatched;
@@ -1755,6 +1777,10 @@ static void EnterBindingMode()
 
     // Binding uses a CRCInit=0, 50Hz, and InvertIQ
     OtaCrcInitializer = 0;
+    #if defined(MURMUR_ENCRYPT)
+        extern void MurmurResetCounter();
+        MurmurResetCounter();
+    #endif
     InBindingMode = true;
     // Any method of entering bind resets a loan
     // Model can be reloaned immediately by binding now
@@ -1788,7 +1814,11 @@ static void ExitBindingMode()
     config.Commit();
 
     OtaUpdateCrcInitFromUid();
+    #if defined(MURMUR_ENCRYPT)
+        { extern void MurmurGetEncKey(uint8_t out[16]); uint8_t ek[16]; MurmurGetEncKey(ek); FHSSrandomiseFHSSsequenceSecure(ek); }
+    #else
     FHSSrandomiseFHSSsequence(uidMacSeedGet());
+    #endif
 
     #if defined(PLATFORM_ESP32) || defined(PLATFORM_ESP8266)
     webserverPreventAutoStart = true;
@@ -2129,8 +2159,15 @@ void setup()
         devicesInit();
 
         setupBindingFromConfig();
-
+        #if defined(MURMUR_ENCRYPT)
+            extern void MurmurInitFromUid(const uint8_t uid[6], bool is_tx);
+            extern void MurmurGetEncKey(uint8_t out[16]);
+            MurmurInitFromUid(UID, false);
+            { uint8_t ek[16]; MurmurGetEncKey(ek); FHSSrandomiseFHSSsequenceSecure(ek); }
+            DBGLN("MurmurLRS: encryption + FHSSv2 active (RX)");
+        #else
         FHSSrandomiseFHSSsequence(uidMacSeedGet());
+        #endif
 
         setupRadio();
 
